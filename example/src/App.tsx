@@ -1,5 +1,5 @@
 import React from "react";
-import { ReactHlsPlayer } from "../../src/index";
+import { ReactHlsPlayer } from "@im03/react-hls-player";
 
 const App: React.FC = () => {
   return (

@@ -1,0 +1,14 @@
+# source
+src/
+public/
+
+# example app
+example/
+
+# config files
+vite.config.ts
+tsconfig.json
+eslint.config.js
+.editorconfig
+.prettierignore
+.prettierrc

@@ -1,6 +1,10 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
+import pkg from "./package.json";
+
+const peerDeps = Object.keys(pkg.peerDependencies || {});
+
 export default defineConfig({
   plugins: [react()],
   publicDir: false,
@@ -13,8 +17,7 @@ export default defineConfig({
       fileName: (format) => `index.${format}.js`,
     },
     rollupOptions: {
-      // Peer dependencies
-      external: ["react", "react-dom", "hls.js"],
+      external: peerDeps,
       output: {
         globals: {
           react: "React",
@@ -23,5 +26,6 @@ export default defineConfig({
         },
       },
     },
+    minify: "esbuild",
   },
 });
