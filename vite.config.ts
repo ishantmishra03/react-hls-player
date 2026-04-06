@@ -3,12 +3,14 @@ import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
+  publicDir: false,
   build: {
+    emptyOutDir: false,
     lib: {
       entry: "src/index.ts",
       name: "ReactHlsPlayer",
       formats: ["es", "cjs"],
-      fileName: (format) => `react-hls-player.${format}.js`,
+      fileName: (format) => `index.${format}.js`,
     },
     rollupOptions: {
       // Peer dependencies
