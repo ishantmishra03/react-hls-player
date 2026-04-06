@@ -19,18 +19,18 @@ A lightweight, TypeScript-first React component for playing HLS (HTTP Live Strea
 ## Installation
 
 ```bash
-npm install @im03/react-hls-player
+npm install @im03/react-hls-player hls.js
 ```
 
 ```bash
-yarn add @im03/react-hls-player
+yarn add @im03/react-hls-player hls.js
 ```
 
 ```bash
-pnpm add @im03/react-hls-player
+pnpm add @im03/react-hls-player hls.js
 ```
 
-> **Peer dependencies**: This package requires `react` and `react-dom` (v18 or v19) to be installed in your project.
+> **Peer dependencies**: This package requires `react` and `react-dom` (v18 or v19) and `hls.js`  to be installed in your project.
 
 ---
 

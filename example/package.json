@@ -10,7 +10,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@im03/react-hls-player": "^0.1.4",
     "@tailwindcss/vite": "^4.2.2",
+    "hls.js": "^1.6.15",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "tailwindcss": "^4.2.2"
