@@ -1,6 +1,6 @@
 {
   "name": "@im03/react-hls-player",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "type": "module",
   "main": "dist/index.cjs.js",
   "module": "dist/index.es.js",
