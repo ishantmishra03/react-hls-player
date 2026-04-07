@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { ReactHlsPlayer, type ReactHlsPlayerRef } from "../../src/index";
+import { ReactHlsPlayer, type ReactHlsPlayerRef } from "@im03/react-hls-player";
 import { Play, Pause, Volume2, VolumeX, Maximize } from "lucide-react";
 
 const App: React.FC = () => {

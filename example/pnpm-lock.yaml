@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@im03/react-hls-player':
-        specifier: ^0.1.4
-        version: 0.1.4(hls.js@1.6.15)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+        specifier: ^0.2.0
+        version: 0.2.0(hls.js@1.6.15)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@tailwindcss/vite':
         specifier: ^4.2.2
         version: 4.2.2(vite@8.0.4(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(@types/node@24.12.2)(jiti@2.6.1))
@@ -199,8 +199,8 @@ packages:
     resolution: {integrity: sha512-bV0Tgo9K4hfPCek+aMAn81RppFKv2ySDQeMoSZuvTASywNTnVJCArCZE2FWqpvIatKu7VMRLWlR1EazvVhDyhQ==}
     engines: {node: '>=18.18'}
 
-  '@im03/react-hls-player@0.1.4':
-    resolution: {integrity: sha512-l7MfbgO1u6fzrRN1+5XoVTKQTSikhblwbnQ/RYqEG/xksI+2mRv8MnkrRAGnJjX8Gn7Xc4py4YVtlEaG2jSpPg==}
+  '@im03/react-hls-player@0.2.0':
+    resolution: {integrity: sha512-8NvX3cARkWHWaYqGycIxeQzMZ/5o6hsm3QHlc2PxGIahy0cod7b61ZZMkDxHQkajnKKXTpnKOLIlXd36jLgcgQ==}
     peerDependencies:
       hls.js: ^1.6.15
       react: ^18.0.0 || ^19.0.0
@@ -1312,7 +1312,7 @@ snapshots:
 
   '@humanwhocodes/retry@0.4.3': {}
 
-  '@im03/react-hls-player@0.1.4(hls.js@1.6.15)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
+  '@im03/react-hls-player@0.2.0(hls.js@1.6.15)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
     dependencies:
       hls.js: 1.6.15
       react: 19.2.4
