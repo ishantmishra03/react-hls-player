@@ -9,8 +9,11 @@ A lightweight, TypeScript-first React component for playing HLS (HTTP Live Strea
 - Native HLS playback via hls.js with automatic fallback for browsers that support HLS natively (Safari)
 - Written in TypeScript with full type exports
 - Configurable hls.js options via `hlsConfig` prop
-- Automatic error recovery for network and media errors
+- Built-in `preset` system for tuning buffer behavior (`performance`, `balanced`, `quality`)
+- Automatic error recovery with exponential backoff retry for network errors
+- Imperative handle ref (`ReactHlsPlayerRef`) for programmatic control: play, pause, seek, volume, quality level
 - Supports `playerRef` for direct access to the underlying `<video>` element
+- Callback props for player lifecycle events: `onReady`, `onPlay`, `onPause`, `onEnded`, `onError`, `onLevelsLoaded`
 - Compatible with React 18 and 19
 - Zero wrapper overhead — renders a plain `<video>` element
 
@@ -30,7 +33,7 @@ yarn add @im03/react-hls-player hls.js
 pnpm add @im03/react-hls-player hls.js
 ```
 
-> **Peer dependencies**: This package requires `react` and `react-dom` (v18 or v19) and `hls.js`  to be installed in your project.
+> **Peer dependencies**: This package requires `react` and `react-dom` (v18 or v19) and `hls.js` to be installed in your project.
 
 ---
 
@@ -54,16 +57,83 @@ export default function App() {
 
 ## Props
 
-| Prop        | Type                                          | Default             | Description                                                                                   |
-| ----------- | --------------------------------------------- | ------------------- | --------------------------------------------------------------------------------------------- |
-| `src`       | `string`                                      | **Required**        | The URL of the HLS stream (`.m3u8` manifest).                                                 |
-| `playerRef` | `RefObject<HTMLVideoElement>`                 | `React.createRef()` | Ref to the underlying `<video>` element. Use this for programmatic control.                   |
-| `hlsConfig` | `HlsConfig`                                   | `{}`                | Partial hls.js configuration object. See [HlsConfig](#hlsconfig) for available options.       |
-| `autoPlay`  | `boolean`                                     | `false`             | Whether to start playback automatically. May be blocked by browsers without user interaction. |
-| `muted`     | `boolean`                                     | `true`              | Whether the video is muted. Set to `false` to enable audio.                                   |
-| `poster`    | `string`                                      | `undefined`         | URL of a poster image shown before the video plays.                                           |
-| `className` | `string`                                      | `""`                | Additional CSS class name(s). The element always includes `react-hls-player` as a base class. |
-| `...props`  | `React.VideoHTMLAttributes<HTMLVideoElement>` | —                   | Any valid HTML `<video>` attribute is forwarded to the underlying element.                    |
+| Prop              | Type                                          | Default      | Description                                                                                   |
+| ----------------- | --------------------------------------------- | ------------ | --------------------------------------------------------------------------------------------- |
+| `src`             | `string`                                      | **Required** | The URL of the HLS stream (`.m3u8` manifest).                                                 |
+| `playerRef`       | `RefObject<HTMLVideoElement>`                 | —            | Ref to the underlying `<video>` element. Use this for programmatic control.                   |
+| `hlsConfig`       | `HlsConfig`                                   | `{}`         | Partial hls.js configuration object. See [HlsConfig](#hlsconfig) for available options.       |
+| `preset`          | `"performance" \| "balanced" \| "quality"`   | `"balanced"` | Buffer preset. See [Presets](#presets) for details.                                           |
+| `autoPlay`        | `boolean`                                     | `false`      | Whether to start playback automatically. May be blocked by browsers without user interaction. |
+| `muted`           | `boolean`                                     | `true`       | Whether the video is muted. Set to `false` to enable audio.                                   |
+| `poster`          | `string`                                      | `undefined`  | URL of a poster image shown before the video plays.                                           |
+| `className`       | `string`                                      | `""`         | Additional CSS class name(s). The element always includes `react-hls-player` as a base class. |
+| `onReady`         | `() => void`                                  | —            | Called when the manifest is parsed and the player is ready.                                   |
+| `onPlay`          | `() => void`                                  | —            | Called when playback starts.                                                                  |
+| `onPause`         | `() => void`                                  | —            | Called when playback is paused.                                                               |
+| `onEnded`         | `() => void`                                  | —            | Called when the video ends.                                                                   |
+| `onError`         | `(error: unknown) => void`                    | —            | Called on any hls.js error (fatal or not).                                                    |
+| `onLevelsLoaded`  | `(levels: string[]) => void`                  | —            | Called with a list of human-readable resolution labels (e.g. `["360p", "720p", "1080p"]`) when the manifest is parsed. |
+| `...props`        | `React.VideoHTMLAttributes<HTMLVideoElement>` | —            | Any valid HTML `<video>` attribute is forwarded to the underlying element.                    |
+
+---
+
+## Presets
+
+The `preset` prop provides opinionated buffer configuration shortcuts. You can still override any value via `hlsConfig`.
+
+| Preset        | Description                                                                 |
+| ------------- | --------------------------------------------------------------------------- |
+| `performance` | Small buffer (`maxBufferLength: 10`, `maxMaxBufferLength: 20`). Best for low-memory or mobile environments. |
+| `balanced`    | hls.js defaults. Suitable for most use cases.                               |
+| `quality`     | Large buffer (`maxBufferLength: 60`, `maxMaxBufferLength: 120`). Best for VOD where smooth, uninterrupted playback is preferred. |
+
+```tsx
+<ReactHlsPlayer
+  src="https://example.com/stream.m3u8"
+  preset="quality"
+  muted={true}
+/>
+```
+
+---
+
+## Imperative Handle (ReactHlsPlayerRef)
+
+Pass a `ref` directly to `<ReactHlsPlayer>` to get access to imperative controls. This is separate from `playerRef` (which gives access to the raw `<video>` element).
+
+```ts
+interface ReactHlsPlayerRef {
+  play: () => void;
+  pause: () => void;
+  seek: (time: number) => void;
+  setVolume: (volume: number) => void;   // 0.0 – 1.0
+  setQuality: (level: number) => void;   // hls.js level index; -1 for auto
+}
+```
+
+```tsx
+import { useRef } from "react";
+import { ReactHlsPlayer, ReactHlsPlayerRef } from "@im03/react-hls-player";
+
+export default function Player() {
+  const controlRef = useRef<ReactHlsPlayerRef>(null);
+
+  return (
+    <>
+      <ReactHlsPlayer
+        ref={controlRef}
+        src="https://example.com/stream.m3u8"
+        muted={true}
+      />
+      <button onClick={() => controlRef.current?.play()}>Play</button>
+      <button onClick={() => controlRef.current?.pause()}>Pause</button>
+      <button onClick={() => controlRef.current?.seek(30)}>Skip to 0:30</button>
+      <button onClick={() => controlRef.current?.setVolume(0.5)}>50% Volume</button>
+      <button onClick={() => controlRef.current?.setQuality(0)}>Lowest Quality</button>
+    </>
+  );
+}
+```
 
 ---
 
@@ -119,9 +189,55 @@ Note that most browsers block autoplay with audio unless the user has interacted
 />
 ```
 
-### Controlling the player programmatically
+### Quality switcher using `onLevelsLoaded`
 
-Pass a ref via `playerRef` to access the native `HTMLVideoElement` and call methods like `.play()`, `.pause()`, or read properties like `.currentTime`.
+`onLevelsLoaded` receives a list of resolution labels derived from the manifest, such as `["360p", "720p", "1080p"]`. Use this alongside `setQuality` on the imperative ref to build a quality selector.
+
+```tsx
+import { useRef, useState } from "react";
+import { ReactHlsPlayer, ReactHlsPlayerRef } from "@im03/react-hls-player";
+
+export default function Player() {
+  const controlRef = useRef<ReactHlsPlayerRef>(null);
+  const [levels, setLevels] = useState<string[]>([]);
+
+  return (
+    <>
+      <ReactHlsPlayer
+        ref={controlRef}
+        src="https://example.com/stream.m3u8"
+        muted={true}
+        onLevelsLoaded={setLevels}
+      />
+      <select onChange={(e) => controlRef.current?.setQuality(Number(e.target.value))}>
+        <option value={-1}>Auto</option>
+        {levels.map((label, i) => (
+          <option key={i} value={i}>{label}</option>
+        ))}
+      </select>
+    </>
+  );
+}
+```
+
+### Lifecycle callbacks
+
+```tsx
+<ReactHlsPlayer
+  src="https://example.com/stream.m3u8"
+  muted={true}
+  onReady={() => console.log("Player ready")}
+  onPlay={() => console.log("Playing")}
+  onPause={() => console.log("Paused")}
+  onEnded={() => console.log("Ended")}
+  onError={(err) => console.error("HLS error", err)}
+  onLevelsLoaded={(levels) => console.log("Available qualities:", levels)}
+/>
+```
+
+### Controlling the player via `playerRef`
+
+Pass a ref via `playerRef` to access the native `HTMLVideoElement` directly.
 
 ```tsx
 import { useRef } from "react";
@@ -130,14 +246,6 @@ import { ReactHlsPlayer } from "@im03/react-hls-player";
 export default function Player() {
   const playerRef = useRef<HTMLVideoElement>(null);
 
-  const handlePause = () => {
-    playerRef.current?.pause();
-  };
-
-  const handlePlay = () => {
-    playerRef.current?.play();
-  };
-
   return (
     <>
       <ReactHlsPlayer
@@ -145,8 +253,8 @@ export default function Player() {
         playerRef={playerRef}
         muted={true}
       />
-      <button onClick={handlePlay}>Play</button>
-      <button onClick={handlePause}>Pause</button>
+      <button onClick={() => playerRef.current?.play()}>Play</button>
+      <button onClick={() => playerRef.current?.pause()}>Pause</button>
     </>
   );
 }
@@ -174,6 +282,7 @@ export default function Player() {
   src="https://example.com/live.m3u8"
   autoPlay={true}
   muted={true}
+  preset="performance"
   hlsConfig={{
     lowLatencyMode: true,
     enableWorker: true,
@@ -219,11 +328,11 @@ When a browser supports HLS natively (e.g., Safari), the component sets the `src
 
 The component handles hls.js errors automatically:
 
-- **Network errors** — calls `hls.startLoad()` to retry the stream.
+- **Network errors** — retries up to 3 times using `hls.startLoad()`, with an increasing delay between each attempt (1s, 2s, 3s).
 - **Media errors** — calls `hls.recoverMediaError()` to attempt recovery.
-- **Fatal unrecoverable errors** — reinitializes the player from scratch.
+- **Fatal unrecoverable errors** — destroys and reinitializes the player from scratch.
 
-All errors are logged to the console via `console.error`.
+All errors are also surfaced via the `onError` callback if provided.
 
 ---
 
@@ -239,7 +348,7 @@ The rendered `<video>` element always has the class `react-hls-player`. You can 
 }
 ```
 
-You can also pass additional classes via the `className`.
+You can also pass additional classes via the `className` prop.
 
 ---
 
@@ -248,7 +357,12 @@ You can also pass additional classes via the `className`.
 All types are exported from the package entry point.
 
 ```ts
-import type { ReactHlsPlayerProps, HlsConfig } from "@im03/react-hls-player";
+import type {
+  ReactHlsPlayerProps,
+  ReactHlsPlayerRef,
+  HlsConfig,
+  PlayerPreset,
+} from "@im03/react-hls-player";
 ```
 
 ---

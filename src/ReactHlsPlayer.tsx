@@ -1,4 +1,10 @@
-import React, { RefObject, useEffect } from "react";
+import React, {
+  forwardRef,
+  RefObject,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+} from "react";
 import Hls from "hls.js";
 
 export type HlsConfig = Partial<{
@@ -19,97 +25,216 @@ export type HlsConfig = Partial<{
   enableWebVTT: boolean;
 }>;
 
+export type PlayerPreset = "performance" | "balanced" | "quality";
+
+export interface ReactHlsPlayerRef {
+  play: () => void;
+  pause: () => void;
+  seek: (time: number) => void;
+  setVolume: (volume: number) => void;
+  setQuality: (level: number) => void;
+}
+
 export interface ReactHlsPlayerProps extends React.VideoHTMLAttributes<HTMLVideoElement> {
   src: string;
-  playerRef?: RefObject<HTMLVideoElement>;
+  playerRef?: RefObject<HTMLVideoElement | null>;
   hlsConfig?: HlsConfig;
+  preset?: PlayerPreset;
+
   autoPlay?: boolean;
   muted?: boolean;
   poster?: string;
   className?: string;
+
+  onReady?: () => void;
+  onPlay?: () => void;
+  onPause?: () => void;
+  onEnded?: () => void;
+  onError?: (error: unknown) => void;
+  onLevelsLoaded?: (levels: string[]) => void;
 }
 
-const ReactHlsPlayer: React.FC<ReactHlsPlayerProps> = ({
-  src,
-  playerRef = React.createRef<HTMLVideoElement>(),
-  hlsConfig,
-  autoPlay = false,
-  muted = true,
-  poster,
-  className = "",
-  ...props
-}) => {
-  useEffect(() => {
-    let hls: Hls;
+const RESOLUTION_BRACKETS: { maxHeight: number; label: string }[] = [
+  { maxHeight: 180, label: "144p" },
+  { maxHeight: 270, label: "240p" },
+  { maxHeight: 390, label: "360p" },
+  { maxHeight: 510, label: "480p" },
+  { maxHeight: 630, label: "540p" },
+  { maxHeight: 790, label: "720p" },
+  { maxHeight: 1100, label: "1080p" },
+  { maxHeight: 1500, label: "1440p" },
+  { maxHeight: Infinity, label: "4K" },
+];
 
-    const initPlayer = () => {
-      if (!playerRef.current) return;
+function toResolutionLabel(height: number): string {
+  if (!height || height <= 0) return "Auto";
+  const match = RESOLUTION_BRACKETS.find((r) => height <= r.maxHeight);
+  return match?.label ?? `${height}p`;
+}
 
-      if (hls) hls.destroy();
+const PRESETS: Record<PlayerPreset, HlsConfig> = {
+  performance: {
+    maxBufferLength: 10,
+    maxMaxBufferLength: 20,
+  },
+  balanced: {},
+  quality: {
+    maxBufferLength: 60,
+    maxMaxBufferLength: 120,
+  },
+};
 
-      hls = new Hls({
-        enableWorker: true,
-        lowLatencyMode: true,
-        ...hlsConfig,
-      });
+const ReactHlsPlayer = forwardRef<ReactHlsPlayerRef, ReactHlsPlayerProps>(
+  (props, ref) => {
+    const {
+      src,
+      playerRef,
+      hlsConfig,
+      preset = "balanced",
+      autoPlay = false,
+      muted = true,
+      poster,
+      className = "",
 
-      hls.attachMedia(playerRef.current);
+      onReady,
+      onPlay,
+      onPause,
+      onEnded,
+      onError,
+      onLevelsLoaded,
 
-      hls.on(Hls.Events.MEDIA_ATTACHED, () => {
-        hls.loadSource(src);
+      ...rest
+    } = props;
 
-        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+    const internalVideoRef = useRef<HTMLVideoElement>(null);
+    const videoRef = playerRef || internalVideoRef;
+
+    const hlsRef = useRef<Hls | null>(null);
+    const retryCount = useRef(0);
+
+    useImperativeHandle(ref, () => ({
+      play: () => videoRef.current?.play(),
+      pause: () => videoRef.current?.pause(),
+      seek: (time: number) => {
+        if (videoRef.current) videoRef.current.currentTime = time;
+      },
+      setVolume: (v: number) => {
+        if (videoRef.current) videoRef.current.volume = v;
+      },
+      setQuality: (level: number) => {
+        if (hlsRef.current) {
+          hlsRef.current.currentLevel = level;
+        }
+      },
+    }));
+
+    useEffect(() => {
+      const video = videoRef.current;
+      if (!video) return;
+
+      let hls: Hls;
+
+      const setupNativeHls = () => {
+        video.src = src;
+      };
+
+      const initHls = () => {
+        hls = new Hls({
+          enableWorker: true,
+          lowLatencyMode: true,
+          ...PRESETS[preset],
+          ...hlsConfig,
+        });
+
+        hlsRef.current = hls;
+
+        hls.attachMedia(video);
+
+        hls.on(Hls.Events.MEDIA_ATTACHED, () => {
+          hls.loadSource(src);
+        });
+
+        hls.on(Hls.Events.MANIFEST_PARSED, (_, data) => {
+          const rawHeights = data.levels.map((level) => level.height);
+          const labels = rawHeights.map(toResolutionLabel);
+
+          retryCount.current = 0;
+
+          onReady?.();
+          onLevelsLoaded?.(labels);
+
           if (autoPlay) {
-            playerRef.current
-              ?.play()
-              .catch(() =>
-                console.warn(
-                  "Autoplay blocked. User interaction required to start video.",
-                ),
-              );
+            video.play().catch(() => {
+              console.warn("Autoplay blocked.");
+            });
           }
         });
-      });
 
-      hls.on(Hls.Events.ERROR, (event, data) => {
-        console.error("HLS.js error:", data);
-        if (data.fatal) {
-          switch (data.type) {
-            case Hls.ErrorTypes.NETWORK_ERROR:
-              hls.startLoad();
-              break;
-            case Hls.ErrorTypes.MEDIA_ERROR:
-              hls.recoverMediaError();
-              break;
-            default:
-              initPlayer();
-              break;
+        hls.on(Hls.Events.ERROR, (event, data) => {
+          onError?.(data);
+
+          if (!data.fatal) return;
+
+          if (data.fatal) {
+            switch (data.type) {
+              case Hls.ErrorTypes.NETWORK_ERROR:
+                if (retryCount.current < 3) {
+                  retryCount.current++;
+                  setTimeout(() => {
+                    hls.startLoad();
+                  }, 1000 * retryCount.current);
+                }
+                break;
+
+              case Hls.ErrorTypes.MEDIA_ERROR:
+                hls.recoverMediaError();
+                break;
+
+              default:
+                hls.destroy();
+                initHls();
+                break;
+            }
           }
-        }
-      });
-    };
+        });
+      };
 
-    if (Hls.isSupported()) {
-      initPlayer();
-    }
+      if (Hls.isSupported()) {
+        initHls();
+      } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+        setupNativeHls();
+      }
 
-    return () => {
-      if (hls) hls.destroy();
-    };
-  }, [src, autoPlay, hlsConfig, playerRef]);
+      const handlePlay = () => onPlay?.();
+      const handlePause = () => onPause?.();
+      const handleEnded = () => onEnded?.();
 
-  return (
-    <video
-      ref={playerRef}
-      src={!Hls.isSupported() ? src : undefined}
-      autoPlay={autoPlay}
-      muted={muted}
-      poster={poster}
-      controls
-      className={`react-hls-player ${className}`}
-      {...props}
-    />
-  );
-};
+      video.addEventListener("play", handlePlay);
+      video.addEventListener("pause", handlePause);
+      video.addEventListener("ended", handleEnded);
+
+      return () => {
+        video.removeEventListener("play", handlePlay);
+        video.removeEventListener("pause", handlePause);
+        video.removeEventListener("ended", handleEnded);
+
+        hls?.destroy();
+        hlsRef.current = null;
+      };
+    }, [src, preset, hlsConfig]);
+
+    return (
+      <video
+        ref={videoRef}
+        autoPlay={autoPlay}
+        muted={muted}
+        poster={poster}
+        controls={props.controls ?? false}
+        className={`react-hls-player w-full rounded-xl bg-black ${className}`}
+        {...rest}
+      />
+    );
+  },
+);
 
 export default ReactHlsPlayer;
